@@ -1,4 +1,4 @@
-FourTwenty DynMarket 💹
+# FourTwenty DynMarket 💹
 A sophisticated and highly customizable dynamic market system with real-time price fluctuations and an intuitive NUI interface. Create unlimited custom markets for any purpose in your FiveM server.
 
 ## Unique Features 🚀
