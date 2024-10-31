@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FourTwenty Dynamic Market</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="market-container">
+        <div class="market-header">
+            <div class="header-left">
+                <div class="icon-container">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                </div>
+                <div class="header-info">
+                    <h2 id="marketTitle">Market</h2>
+                    <p id="nextUpdate">Next update in: --:--</p>
+                </div>
+            </div>
+            <button class="close-button" id="closeButton">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="market-categories" id="categories"></div>
+        
+        <div class="market-items" id="itemList"></div>
+
+        <div class="market-footer">
+            <div class="total-value">
+                <span id="totalValueLabel">Total Value</span>
+                <span id="totalValue">$0</span>
+            </div>
+            <button class="sell-button" id="sellButton" disabled>Sell Selected Items</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

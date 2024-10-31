@@ -1,0 +1,368 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+:root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #60a5fa;
+    --success: #10b981;
+    --error: #ef4444;
+    --background: #1a1f2d;
+    --surface: rgba(30, 41, 59, 0.8);
+    --surface-hover: rgba(30, 41, 59, 0.9);
+    --border: rgba(75, 85, 99, 0.2);
+    --text: #ffffff;
+    --text-secondary: #94a3b8;
+}
+
+body {
+    display: none;
+    height: 100vh;
+    background: transparent;
+    user-select: none;
+}
+
+.market-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    max-width: 90vw;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.market-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.icon-container {
+    background: rgba(59, 130, 246, 0.2);
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+}
+
+.icon-container svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--primary-light);
+}
+
+.header-info h2 {
+    color: var(--text);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.header-info p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.close-button {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+}
+
+.close-button:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.close-button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.market-categories {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+}
+
+.category-button {
+    background: var(--surface);
+    border: none;
+    color: var(--text);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+    font-size: 0.875rem;
+}
+
+.category-button:hover {
+    background: var(--surface-hover);
+}
+
+.category-button.active {
+    background: var(--primary);
+}
+
+.market-items {
+    padding: 0.75rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.item-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface);
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.2s;
+}
+
+.item-card:hover {
+    background: var(--surface-hover);
+}
+
+.item-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.item-checkbox {
+    width: 1.125rem;
+    height: 1.125rem;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.item-details h3 {
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.item-details p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.price-info {
+    text-align: right;
+    min-width: 120px;
+}
+
+.price-current {
+    color: var(--text);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    font-size: 1rem;
+}
+
+.price-trend {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.875rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.trend-up {
+    color: var(--success);
+}
+
+.trend-down {
+    color: var(--error);
+}
+
+.price-total {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.market-footer {
+    padding: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.total-value {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.total-value span:first-child {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.total-value span:last-child {
+    color: var(--text);
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.sell-button {
+    width: 100%;
+    background: var(--primary);
+    color: var(--text);
+    border: none;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sell-button:hover:not(:disabled) {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+}
+
+.sell-button:disabled {
+    background: var(--surface);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.item-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.item-image {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    padding: 4px;
+}
+
+.item-details {
+    flex: 1;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { 
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+    to { 
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.market-container {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.item-card {
+    animation: slideIn 0.3s ease-out;
+    animation-fill-mode: both;
+}
+
+.item-card:nth-child(n) {
+    animation-delay: calc(0.05s * var(--i, 0));
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+    .market-container {
+        width: 95vw;
+        max-height: 90vh;
+    }
+
+    .market-items {
+        max-height: 50vh;
+    }
+
+    .item-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .item-info {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .price-info {
+        text-align: center;
+    }
+
+    .price-current {
+        justify-content: center;
+    }
+
+    .header-info h2 {
+        font-size: 1.125rem;
+    }
+
+    .total-value span:last-child {
+        font-size: 1.125rem;
+    }
+
+    .sell-button {
+        padding: 0.625rem;
+        font-size: 0.875rem;
+    }
+}
