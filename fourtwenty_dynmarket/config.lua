@@ -4,6 +4,9 @@ Config = {}
 Config.Debug = false
 Config.Locale = 'en'
 
+-- Using OX Inventory?
+Config.ox_inventory = false -- Set true if you use ox_inventory
+
 -- Market update intervals (in milliseconds)
 Config.Intervals = {
     randomUpdate = 1800000,    -- 30 minutes - Base interval for random price changes

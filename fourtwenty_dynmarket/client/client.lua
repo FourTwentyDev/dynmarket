@@ -295,12 +295,11 @@ RegisterNUICallback('getPlayerInventory', function(data, cb)
         return
     end
 
-    local playerData = ESX.GetPlayerData()
-    local inventory = {}
+    if Config.ox_inventory then
+        local inventory = {}
+        local items = exports.ox_inventory:Items()
     
-    -- Format inventory data for UI
-    if playerData and playerData.inventory then
-        for _, item in ipairs(playerData.inventory) do
+        for _, item in pairs(items) do
             if item.count and item.count > 0 then
                 inventory[item.name] = {
                     count = item.count,
@@ -308,9 +307,24 @@ RegisterNUICallback('getPlayerInventory', function(data, cb)
                 }
             end
         end
+        cb(inventory)
+    else
+        local playerData = ESX.GetPlayerData()
+        local inventory = {}
+        
+        -- Format inventory data for UI
+        if playerData and playerData.inventory then
+            for _, item in ipairs(playerData.inventory) do
+                if item.count and item.count > 0 then
+                    inventory[item.name] = {
+                        count = item.count,
+                        label = item.label
+                    }
+                end
+            end
+        end
+        cb(inventory)
     end
-    
-    cb(inventory)
 end)
 
 -- Additional utility functions
