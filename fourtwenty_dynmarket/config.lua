@@ -4,16 +4,17 @@ Config = {}
 Config.Debug = false
 Config.Locale = 'en'
 
+-- Market update intervals (in milliseconds)
 Config.Intervals = {
-    priceUpdate = 300000, 
-    databaseSave = 900000  -- 15 minutes
+    randomUpdate = 1800000,    -- 30 minutes - Base interval for random price changes
+    minSaleDelay = 300000      -- 5 minutes - Minimum time between supply/demand updates
 }
 
 Config.UI = {
     key = 38,             -- E key to open market
     command = 'market',   -- Command to open market (/market) (Admin only)
-    closeKey = 177,        -- Backspace to close
-    inventoryLink = "nui://inventory/web/dist/assets/items/%s.png" -- Link to your item pictures, keep %s, it gets replaced with item name
+    closeKey = 177,       -- Backspace to close
+    inventoryLink = "nui://inventory/web/dist/assets/items/%s.png"
 }
 
 Config.Markets = {
@@ -34,27 +35,42 @@ Config.Markets = {
         priceSettings = {
             minMultiplier = 0.7,
             maxMultiplier = 1.3,
-            maxChangePercent = 10
+            maxChangePercent = 10,
+            supplyDemand = {
+                enabled = false,
+                impact = {
+                    sale = 0.01,
+                    recovery = 0.005,
+                    maximum = 0.30
+                },
+                history = {
+                    duration = 12,
+                    resetOnRestart = false
+                }
+            }
         },
         items = {
-            -- Restaurant Zutaten
             {
                 name = "Burgerbrötchen",
                 item = "ing_bread",
                 basePrice = 100,
-                category = "Backwaren"
+                category = "Backwaren",
+                counterItem = "burger",  -- Optional: Counter-Item
+                counterEffect = 0.05     -- Optional: Counter-Item effect
             },
             {
                 name = "Fleisch",
                 item = "ing_meat",
                 basePrice = 100,
-                category = "Fleisch"
+                category = "Fleisch"     -- No counter item defined
             },
             {
                 name = "Salat",
                 item = "ing_salad",
                 basePrice = 100,
-                category = "Gemüse"
+                category = "Gemüse",
+                counterItem = "burger",
+                counterEffect = 0.03
             },
             {
                 name = "Tomaten",
@@ -83,12 +99,24 @@ Config.Markets = {
         location = {
             coords = vector3(-1816.5, -1193.8, 14.3),
             heading = 319.0,
-            npcModel = "s_m_m_fishmerchant"
+            npcModel = "s_m_m_linecook"
         },
         priceSettings = {
             minMultiplier = 0.6,
             maxMultiplier = 1.8,
-            maxChangePercent = 20
+            maxChangePercent = 20,
+            supplyDemand = {
+                enabled = true,
+                impact = {
+                    sale = 0.02,
+                    recovery = 0.01,
+                    maximum = 0.40
+                },
+                history = {
+                    duration = 24,
+                    resetOnRestart = false
+                }
+            }
         },
         items = {
             {
@@ -107,13 +135,17 @@ Config.Markets = {
                 name = "Lachs",
                 item = "farm_salmon",
                 basePrice = 85,
-                category = "Edle Fische"
+                category = "Edle Fische",
+                counterItem = "sushi",
+                counterEffect = 0.04
             },
             {
                 name = "Thunfisch",
                 item = "farm_tuna",
                 basePrice = 120,
-                category = "Edle Fische"
+                category = "Edle Fische",
+                counterItem = "sushi",
+                counterEffect = 0.05
             },
             {
                 name = "Hummer",
@@ -153,7 +185,19 @@ Config.Markets = {
         priceSettings = {
             minMultiplier = 0.7,
             maxMultiplier = 1.6,
-            maxChangePercent = 15
+            maxChangePercent = 15,
+            supplyDemand = {
+                enabled = true,
+                impact = {
+                    sale = 0.015,
+                    recovery = 0.008,
+                    maximum = 0.35
+                },
+                history = {
+                    duration = 18,
+                    resetOnRestart = false
+                }
+            }
         },
         items = {
             {
@@ -166,19 +210,25 @@ Config.Markets = {
                 name = "Eisenerz",
                 item = "farm_iron",
                 basePrice = 45,
-                category = "Erze"
+                category = "Erze",
+                counterItem = "iron_ingot",
+                counterEffect = 0.03
             },
             {
                 name = "Kupfererz",
                 item = "farm_copper",
                 basePrice = 60,
-                category = "Erze"
+                category = "Erze",
+                counterItem = "copper_ingot",
+                counterEffect = 0.03
             },
             {
                 name = "Golderz",
                 item = "farm_gold",
                 basePrice = 180,
-                category = "Edelmetalle"
+                category = "Edelmetalle",
+                counterItem = "gold_ingot",
+                counterEffect = 0.04
             },
             {
                 name = "Diamant",
@@ -197,7 +247,7 @@ Config.Markets = {
 
     ["pawnshop"] = {
         enabled = true,
-        name = "Pfandleiher",
+        name = "Pawnshop",
         blip = {
             sprite = 267,
             color = 5,
@@ -212,7 +262,19 @@ Config.Markets = {
         priceSettings = {
             minMultiplier = 0.5,
             maxMultiplier = 1.4,
-            maxChangePercent = 25
+            maxChangePercent = 25,
+            supplyDemand = {
+                enabled = true,
+                impact = {
+                    sale = 0.025,
+                    recovery = 0.012,
+                    maximum = 0.45
+                },
+                history = {
+                    duration = 24,
+                    resetOnRestart = false
+                }
+            }
         },
         items = {
             {
@@ -242,3 +304,34 @@ Config.Markets = {
         }
     }
 }
+
+-- Helper functions
+function Config.GetMarketSettings(marketId)
+    return Config.Markets[marketId]
+end
+
+function Config.IsSupplyDemandEnabled(marketId)
+    local market = Config.Markets[marketId]
+    return market and 
+           market.priceSettings and 
+           market.priceSettings.supplyDemand and 
+           market.priceSettings.supplyDemand.enabled
+end
+
+function Config.GetSupplyDemandSettings(marketId)
+    local market = Config.Markets[marketId]
+    if not market or not market.priceSettings then return nil end
+    return market.priceSettings.supplyDemand
+end
+
+function Config.HasCounterItem(marketId, itemName)
+    local market = Config.Markets[marketId]
+    if not market then return false end
+    
+    for _, item in ipairs(market.items) do
+        if item.item == itemName then
+            return item.counterItem ~= nil
+        end
+    end
+    return false
+end

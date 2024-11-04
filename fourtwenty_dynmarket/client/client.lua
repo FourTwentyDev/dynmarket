@@ -5,6 +5,7 @@ ESX = exports["es_extended"]:getSharedObject()
 local currentMarket = nil
 local isNearMarket = false
 local showingUI = false
+local marketBlips = {}
 
 -- Translation helper function
 local function Translate(key, ...)
@@ -22,41 +23,97 @@ end
 
 -- Initialize market locations and NPCs
 CreateThread(function()
+    -- Wait for game to fully initialize
+    Wait(2000)
+    
     for marketId, market in pairs(Config.Markets) do
         if market.enabled then
-            -- Create map blip
-            local blip = AddBlipForCoord(market.location.coords)
-            SetBlipSprite(blip, market.blip.sprite)
-            SetBlipDisplay(blip, market.blip.display)
-            SetBlipScale(blip, market.blip.scale)
-            SetBlipColour(blip, market.blip.color)
-            SetBlipAsShortRange(blip, true)
-            
-            -- Set blip name
-            BeginTextCommandSetBlipName("STRING")
-            AddTextComponentString(market.name)
-            EndTextCommandSetBlipName(blip)
-            
-            -- Create market NPC
-            local hash = GetHashKey(market.location.npcModel)
-            RequestModel(hash)
-            
-            while not HasModelLoaded(hash) do
-                Wait(1)
+            -- Debug logging
+            if Config.Debug then
+                print("Creating market: " .. marketId)
+                print("Location: " .. tostring(market.location.coords))
             end
             
-            -- Spawn and configure NPC
-            local ped = CreatePed(4, hash, 
-                market.location.coords.x, 
-                market.location.coords.y, 
-                market.location.coords.z - 1.0, 
-                market.location.heading, 
-                false, true)
+            -- Ensure coordinates are valid
+            if market.location and market.location.coords then
+                -- Create map blip with error handling
+                local blip = AddBlipForCoord(
+                    market.location.coords.x,
+                    market.location.coords.y,
+                    market.location.coords.z
+                )
                 
-            SetEntityHeading(ped, market.location.heading)
-            FreezeEntityPosition(ped, true)
-            SetEntityInvincible(ped, true)
-            SetBlockingOfNonTemporaryEvents(ped, true)
+                if blip and blip ~= 0 then -- Validate blip creation
+                    SetBlipSprite(blip, market.blip.sprite or 1)
+                    SetBlipDisplay(blip, market.blip.display or 4)
+                    SetBlipScale(blip, market.blip.scale or 1.0)
+                    SetBlipColour(blip, market.blip.color or 1)
+                    SetBlipAsShortRange(blip, true)
+                    
+                    -- Set blip name with error handling
+                    BeginTextCommandSetBlipName("STRING")
+                    AddTextComponentString(market.name or "Market")
+                    EndTextCommandSetBlipName(blip)
+                    
+                    -- Store blip reference
+                    marketBlips[marketId] = blip
+                    
+                    if Config.Debug then
+                        print("Successfully created blip for " .. marketId)
+                    end
+                else
+                    print("^1ERROR: Failed to create blip for " .. marketId .. "^7")
+                end
+            else
+                print("^1ERROR: Invalid coordinates for market " .. marketId .. "^7")
+            end
+            
+            -- Create market NPC
+            if market.location.npcModel then
+                local hash = GetHashKey(market.location.npcModel)
+                RequestModel(hash)
+                
+                -- Add timeout to model loading
+                local timeout = 0
+                while not HasModelLoaded(hash) and timeout < 50 do
+                    Wait(100)
+                    timeout = timeout + 1
+                end
+                
+                if HasModelLoaded(hash) then
+                    -- Spawn and configure NPC
+                    local ped = CreatePed(4, hash, 
+                        market.location.coords.x, 
+                        market.location.coords.y, 
+                        market.location.coords.z - 1.0, 
+                        market.location.heading, 
+                        false, true)
+                    
+                    if DoesEntityExist(ped) then
+                        SetEntityHeading(ped, market.location.heading)
+                        FreezeEntityPosition(ped, true)
+                        SetEntityInvincible(ped, true)
+                        SetBlockingOfNonTemporaryEvents(ped, true)
+                        
+                        -- Add additional NPC configuration
+                        SetPedDiesWhenInjured(ped, false)
+                        SetPedCanPlayAmbientAnims(ped, true)
+                        SetPedCanRagdollFromPlayerImpact(ped, false)
+                        SetPedRagdollOnCollision(ped, false)
+                        SetPedConfigFlag(ped, 251, true) -- Set NPC immune to player collision
+                        
+                        if Config.Debug then
+                            print("Successfully created NPC for " .. marketId)
+                        end
+                    else
+                        print("^1ERROR: Failed to create NPC for " .. marketId .. "^7")
+                    end
+                else
+                    print("^1ERROR: Failed to load NPC model for " .. marketId .. "^7")
+                end
+                
+                SetModelAsNoLongerNeeded(hash)
+            end
         end
     end
 end)
@@ -112,12 +169,16 @@ function OpenMarketUI(marketId)
         showingUI = true
         SetNuiFocus(true, true)
         
-        SendNUIMessage({
+        -- Prepare and send UI data
+        local uiData = {
             type = 'showUI',
             marketData = marketData,
             translations = GetTranslations(),
-            inventoryLink = Config.UI.inventoryLink
-        })
+            inventoryLink = Config.UI.inventoryLink,
+            supplyDemandEnabled = Config.IsSupplyDemandEnabled(marketId)
+        }
+        
+        SendNUIMessage(uiData)
     end, marketId)
 end
 
@@ -147,7 +208,10 @@ function GetTranslations()
         'trend_stable',
         'category',
         'total',
-        'close'
+        'close',
+        'supply_high',
+        'supply_low',
+        'supply_normal'
     }
     
     for _, key in ipairs(keys) do
@@ -165,7 +229,8 @@ AddEventHandler('fourtwenty_dynmarket:updatePrices', function(marketId, prices, 
             type = 'updatePrices',
             prices = prices,
             trends = trends,
-            nextUpdate = nextUpdate
+            nextUpdate = nextUpdate,
+            supplyDemandEnabled = Config.IsSupplyDemandEnabled(marketId)
         })
     end
 end)
@@ -179,12 +244,33 @@ AddEventHandler('fourtwenty_dynmarket:sellComplete', function(data)
             type = 'sellComplete',
             data = data
         })
+        
+        -- Request inventory refresh after sale
+        TriggerEvent('fourtwenty_dynmarket:refreshInventory')
     end
 end)
 
 RegisterNetEvent('fourtwenty_dynmarket:notification')
 AddEventHandler('fourtwenty_dynmarket:notification', function(message)
     ESX.ShowNotification(Translate(message))
+end)
+
+-- Resource cleanup
+AddEventHandler('onResourceStop', function(resourceName)
+    if GetCurrentResourceName() ~= resourceName then return end
+    
+    -- Remove all blips when resource stops
+    for _, blip in pairs(marketBlips) do
+        if DoesBlipExist(blip) then
+            RemoveBlip(blip)
+        end
+    end
+    
+    -- Reset UI state
+    if showingUI then
+        SetNuiFocus(false, false)
+        showingUI = false
+    end
 end)
 
 -- NUI Callbacks
@@ -226,3 +312,36 @@ RegisterNUICallback('getPlayerInventory', function(data, cb)
     
     cb(inventory)
 end)
+
+-- Additional utility functions
+function IsPlayerNearMarket(marketId)
+    local market = Config.Markets[marketId]
+    if not market or not market.enabled then return false end
+    
+    local playerCoords = GetEntityCoords(PlayerPedId())
+    local distance = #(playerCoords - market.location.coords)
+    
+    return distance < 3.0
+end
+
+-- Command handler for admin market control (if enabled)
+if Config.UI.command then
+    RegisterCommand(Config.UI.command, function(source, args)
+        if not args[1] then return end
+        
+        local marketId = args[1]
+        if Config.Markets[marketId] and IsPlayerNearMarket(marketId) then
+            OpenMarketUI(marketId)
+        else
+            ESX.ShowNotification(Translate('not_near_market'))
+        end
+    end)
+end
+
+-- Key mapping for market interaction
+RegisterKeyMapping('market_interact', 'Open Market Menu', 'keyboard', 'E')
+RegisterCommand('market_interact', function()
+    if currentMarket and not showingUI and IsPlayerNearMarket(currentMarket) then
+        OpenMarketUI(currentMarket)
+    end
+end, false)

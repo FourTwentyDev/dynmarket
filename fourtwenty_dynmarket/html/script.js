@@ -10,7 +10,9 @@ let state = {
     playerInventory: {},
     nextUpdate: 0,
     selectedItems: new Set(),
-    inventoryLink: null
+    inventoryLink: null,
+    supplyDemandEnabled: false,
+    supplyLevels: {}
 };
 
 // Utility Functions
@@ -114,9 +116,14 @@ const updateItemList = () => {
                         alt="${item.name}"
                     >
                     <div class="item-details">
-                        <h3>${item.name}</h3>
-                        <p>${state.translations.quantity}: ${playerItem.count}x</p>
-                    </div>
+            <h3>${item.name}</h3>
+            <p>${state.translations.quantity}: ${playerItem.count}x</p>
+            ${state.supplyDemandEnabled ? `
+                <span class="supply-indicator ${getSupplyClass(item.item)}">
+                    ${getSupplyText(item.item)}
+                </span>
+            ` : ''}
+        </div>
                 </div>
                 <div class="price-info">
                     <div class="price-current">
@@ -144,6 +151,20 @@ const updateItemList = () => {
 
             itemList.appendChild(itemElement);
         });
+};
+
+const getSupplyClass = (itemName) => {
+    const trend = state.trends[itemName];
+    if (trend === 'down') return 'supply-high';
+    if (trend === 'up') return 'supply-low';
+    return 'supply-normal';
+};
+
+const getSupplyText = (itemName) => {
+    const trend = state.trends[itemName];
+    if (trend === 'down') return state.translations.supply_high;
+    if (trend === 'up') return state.translations.supply_low;
+    return state.translations.supply_normal;
 };
 
 const updateTotalValue = () => {
@@ -184,7 +205,7 @@ const handleShowUI = (data) => {
     state.nextUpdate = Date.now() + data.marketData.nextUpdate;
     state.inventory = data.marketData.config.items;
     state.selectedItems.clear();
-
+    state.supplyDemandEnabled = data.supplyDemandEnabled;
     state.inventoryLink = data.inventoryLink
 
     state.categories = new Set(data.marketData.config.items.map(item => item.category));
@@ -193,7 +214,9 @@ const handleShowUI = (data) => {
     document.getElementById('marketTitle').textContent = data.marketData.config.name;
     document.getElementById('totalValueLabel').textContent = state.translations.total_value;
     document.getElementById('sellButton').textContent = state.translations.sell_all;
-
+    if (state.supplyDemandEnabled) {
+        document.getElementById('marketInfo').textContent = state.translations.supply_demand_active;
+    }
     document.body.style.display = 'block';
     updatePlayerInventory();
 };
@@ -239,13 +262,14 @@ window.addEventListener('message', (event) => {
             break;
             
         case 'updatePrices':
-            state.prices = data.prices;
-            state.trends = data.trends;
-            if (data.nextUpdate) {
-                state.nextUpdate = Date.now() + data.nextUpdate;
-            }
-            updateUI();
-            break;
+                state.prices = data.prices;
+                state.trends = data.trends;
+                state.supplyDemandEnabled = data.supplyDemandEnabled;
+                if (data.nextUpdate) {
+                    state.nextUpdate = Date.now() + data.nextUpdate;
+                }
+                updateUI();
+                break;
             
         case 'sellComplete':
             state.selectedItems.clear();

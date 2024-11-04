@@ -23,7 +23,11 @@ Locales['en'] = {
     ['market_closed'] = 'This market is currently closed',
     ['inventory_full'] = 'Your inventory is full',
     ['not_enough_money'] = 'You don\'t have enough money',
-    ['debug_price_update'] = 'Market prices updated for: %s'
+    ['debug_price_update'] = 'Market prices updated for: %s',
+    ['supply_high'] = 'High Supply',
+    ['supply_low'] = 'Low Supply',
+    ['supply_normal'] = 'Normal Supply',
+    ['supply_demand_active'] = 'Dynamic Market System Active'
 }
 
 -- German translations
@@ -49,5 +53,9 @@ Locales['de'] = {
     ['market_closed'] = 'Dieser Markt ist derzeit geschlossen',
     ['inventory_full'] = 'Dein Inventar ist voll',
     ['not_enough_money'] = 'Du hast nicht genug Geld',
-    ['debug_price_update'] = 'Marktpreise aktualisiert für: %s'
+    ['debug_price_update'] = 'Marktpreise aktualisiert für: %s',
+    ['supply_high'] = 'Hoher Vorrat',
+    ['supply_low'] = 'Niedriger Vorrat',
+    ['supply_normal'] = 'Normaler Vorrat',
+    ['supply_demand_active'] = 'Dynamisches Marktsystem Aktiv'
 }
