@@ -1,6 +1,18 @@
--- Initialize ESX framework
-ESX = exports["es_extended"]:getSharedObject()
+local QBCore, ESX = nil, nil
 
+if Config.Framework == "QBCore" then
+    QBCore = exports['qb-core']:GetCoreObject()
+    if not QBCore then
+        print("^1ERROR: Failed to get QBCore object.^7")
+    end
+elseif Config.Framework == "ESX" then
+    ESX = exports['es_extended']:getSharedObject()
+    if not ESX then
+        print("^1ERROR: Failed to get ESX shared object.^7")
+    end
+else
+    print("^1ERROR: Unsupported framework: " .. Config.Framework .. "^7")
+end
 -- State management
 local marketPrices = {}
 local nextUpdates = {}
@@ -126,16 +138,14 @@ local function GetBaseSupplyImpact(marketId, itemName)
     local sdSettings = Config.GetSupplyDemandSettings(marketId)
     if not sdSettings then return 0.0 end
     
-    -- Get recent sales history
-    local history = MySQL.Sync.fetchAll([[
+    local history = MySQL.Sync.fetchAll([[ 
         SELECT 
-            COUNT(*) as transactions,
-            SUM(quantity) as total_sold,
-            MAX(sale_time) as last_sale
-        FROM fourtwenty_market_sales
+            COUNT(*) as transactions, 
+            SUM(quantity) as total_sold 
+        FROM fourtwenty_market_sales 
         WHERE 
             market_id = @marketId 
-            AND item_name = @itemName
+            AND item_name = @itemName 
             AND sale_time > DATE_SUB(NOW(), INTERVAL @hours HOUR)
     ]], {
         ['@marketId'] = marketId,
@@ -143,14 +153,13 @@ local function GetBaseSupplyImpact(marketId, itemName)
         ['@hours'] = sdSettings.history.duration
     })[1]
 
-    if not history.total_sold or history.total_sold == 0 then
+    -- If no sales, reduce price over time for recovery
+    if not history or not history.total_sold or history.total_sold == 0 then
         return -sdSettings.impact.recovery
     end
 
-    return math.min(
-        history.total_sold * sdSettings.impact.sale,
-        sdSettings.impact.maximum
-    )
+    -- Larger sales should increase price (reduce supply = scarcity)
+    return -math.min(history.total_sold * sdSettings.impact.sale, sdSettings.impact.maximum)
 end
 
 local function GetCounterItemEffect(marketId, itemName)
@@ -223,13 +232,13 @@ local function CalculateNewPrice(marketId, itemName)
     if Config.Debug then
         print("\n=== Starting price calculation for " .. itemName .. " in market " .. marketId .. " ===")
     end
-    
+
     local market = Config.Markets[marketId]
     if not market or not market.priceSettings then
         print("Error: Invalid market or missing price settings")
         return nil
     end
-    
+
     -- Find item and its base price
     local item = nil
     for _, marketItem in ipairs(market.items) do
@@ -238,77 +247,108 @@ local function CalculateNewPrice(marketId, itemName)
             break
         end
     end
-    if not item then 
+
+    if not item then
         print("Error: Item not found in market")
-        return nil 
+        return nil
     end
-    
+
     local basePrice = item.basePrice
     local currentPrice = marketPrices[marketId][itemName] or basePrice
-    
+
     if Config.Debug then
         print("Base price: " .. basePrice)
         print("Current price: " .. currentPrice)
     end
-    
+
     -- Calculate random fluctuation
     local maxChange = math.floor(basePrice * (market.priceSettings.maxChangePercent / 100))
     local randomChange = math.random(-maxChange, maxChange)
-    local newPrice = currentPrice + randomChange
-    
+
     if Config.Debug then
         print("Random price change: " .. randomChange)
-        print("New price after random change: " .. newPrice)
     end
-    
-    -- Apply supply & demand if enabled
+
+    -- Apply supply & demand impact
+    local supplyImpact = 0.0
     if Config.IsSupplyDemandEnabled(marketId) then
-        local lastSaleTime = lastSaleUpdates[marketId][itemName] or 0
-        local timeSinceLastSale = os.time() - lastSaleTime
-        
+        supplyImpact = GetSupplyImpact(marketId, itemName)
+        supplyImpact = math.floor(basePrice * supplyImpact) -- Convert to price delta
+
         if Config.Debug then
-            print("\nSupply & Demand is enabled")
-            print("Time since last sale: " .. timeSinceLastSale .. " seconds")
+            print("Supply impact (price delta): " .. supplyImpact)
         end
-        
-        if timeSinceLastSale >= (Config.Intervals.minSaleDelay / 1000) then
-            local supplyImpact = GetSupplyImpact(marketId, itemName)
-            newPrice = newPrice * (1 - supplyImpact)
-            
-            if Config.Debug then
-                print("Supply impact factor: " .. supplyImpact)
-                print("Price after supply impact: " .. newPrice)
-            end
-        elseif Config.Debug then
-            print("Too soon since last sale, skipping supply impact")
-        end
-    elseif Config.Debug then
-        print("\nSupply & Demand is disabled")
     end
-    
-    -- Ensure price stays within boundaries
+
+    -- Dynamic weight adjustment
+    local totalSales = MySQL.Sync.fetchScalar([[ 
+        SELECT SUM(quantity) 
+        FROM fourtwenty_market_sales 
+        WHERE market_id = @marketId 
+        AND item_name = @itemName 
+        AND sale_time > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+    ]], {
+        ['@marketId'] = marketId,
+        ['@itemName'] = itemName
+    }) or 0
+
+    local dynamicWeight = math.min(totalSales / 50, 1.0) -- Max weight at 50+ sales
+    local randomWeight = 1.0 - dynamicWeight
+    local supplyWeight = dynamicWeight
+
+    if Config.Debug then
+        print(string.format("Weights - Random: %.2f, Supply: %.2f", randomWeight, supplyWeight))
+    end
+
+    local combinedChange = (randomChange * randomWeight) + (supplyImpact * supplyWeight)
+
+    if Config.Debug then
+        print("Combined price change (weighted): " .. combinedChange)
+    end
+
+    -- Final price calculation
+    local newPrice = currentPrice + combinedChange
     local minPrice = math.floor(basePrice * market.priceSettings.minMultiplier)
     local maxPrice = math.floor(basePrice * market.priceSettings.maxMultiplier)
-    local finalPrice = math.max(minPrice, math.min(maxPrice, math.floor(newPrice)))
-    
+    local finalPrice = math.max(minPrice, math.min(maxPrice, math.floor(newPrice + 0.5))) -- Ensure whole numbers
+
     if Config.Debug then
-        print("\nPrice boundaries:")
+        print("Price boundaries:")
         print("Min allowed price: " .. minPrice)
         print("Max allowed price: " .. maxPrice)
-        print("Final adjusted price: " .. finalPrice)
+        print("Rounded final price: " .. finalPrice)
     end
-    
+
+    -- Apply minimal change threshold
+    local threshold = Config.PriceCalculation.minChangeThreshold or 1
+    if math.abs(finalPrice - currentPrice) < threshold then
+        finalPrice = currentPrice
+        if Config.Debug then
+            print("Price change below threshold, keeping current price.")
+        end
+    end
+
     -- Set price trend
-    local trend = finalPrice > currentPrice and "up" or (finalPrice < currentPrice and "down" or "stable")
+    local trend
+    if finalPrice > currentPrice then
+        trend = "up"
+    elseif finalPrice < currentPrice then
+        trend = "down"
+    else
+        trend = "stable"
+    end
     marketTrends[marketId][itemName] = trend
-    
+
     if Config.Debug then
         print("Price trend: " .. trend)
         print("=== Price calculation complete ===\n")
     end
-    
+
     return finalPrice
 end
+
+
+
 
 local function UpdateMarketPrices(marketId)
     if not Config.Markets[marketId] or not Config.Markets[marketId].enabled then 
@@ -395,28 +435,47 @@ end)
 RegisterServerEvent('fourtwenty_dynmarket:sellItems')
 AddEventHandler('fourtwenty_dynmarket:sellItems', function(marketId, itemList)
     local source = source
-    local xPlayer = ESX.GetPlayerFromId(source)
-    
+    local xPlayer
+
+    if Config.Framework == "ESX" then
+        xPlayer = ESX.GetPlayerFromId(source)
+    elseif Config.Framework == "QBCore" then
+        xPlayer = QBCore.Functions.GetPlayer(source)
+    else
+        print("^1ERROR: Unsupported framework^7")
+        return
+    end
+
+    -- Check if market and player are valid
     if not xPlayer or not Config.Markets[marketId] or not Config.Markets[marketId].enabled then 
         return 
     end
-    
+
     local totalEarnings = 0
     local soldItems = {}
-    
+
     -- Process each item in the sale
     for _, itemData in pairs(itemList) do
         if itemData and itemData.item then
-            local item = xPlayer.getInventoryItem(itemData.item)
+            local item = nil
+
+            -- Get the item from the player's inventory based on the framework
+            if Config.Framework == "ESX" then
+                item = xPlayer.getInventoryItem(itemData.item)
+            elseif Config.Framework == "QBCore" then
+                item = xPlayer.Functions.GetItemByName(itemData.item)
+            end
             
-            if item and item.count and item.count > 0 then
-                local price = marketPrices[marketId][itemData.item] or itemData.basePrice
+            if item and ((Config.Framework == "ESX" and item.count > 0) or (Config.Framework == "QBCore" and item.amount > 0)) then
+                local itemCount = Config.Framework == "ESX" and item.count or item.amount
+                local price = marketPrices[marketId] and marketPrices[marketId][itemData.item] or itemData.basePrice
+
                 if price then
-                    local earnings = math.floor(item.count * price)
+                    local earnings = math.floor(itemCount * price)
                     
                     table.insert(soldItems, {
                         item = itemData.item,
-                        count = item.count,
+                        count = itemCount,
                         price = price,
                         earnings = earnings
                     })
@@ -435,23 +494,39 @@ AddEventHandler('fourtwenty_dynmarket:sellItems', function(marketId, itemList)
                         ]], {
                             ['@marketId'] = marketId,
                             ['@item'] = itemData.item,
-                            ['@quantity'] = item.count,
+                            ['@quantity'] = itemCount,
                             ['@price'] = price
                         })
                     end
                 end
+            else
+                -- Debug info if item not found or zero quantity
+                if Config.Debug then
+                    print(string.format("[DynMarket] No quantity for item %s in inventory of player %s", itemData.item, xPlayer.identifier))
+                end
             end
         end
     end
-    
-    -- Complete transaction if items were sold
+
+
     if totalEarnings > 0 then
-        xPlayer.addAccountMoney('money', totalEarnings)
-        
-        for _, sale in ipairs(soldItems) do
-            xPlayer.removeInventoryItem(sale.item, sale.count)
+        -- Add the money to the player's account
+        if Config.Framework == "ESX" then
+            xPlayer.addAccountMoney('money', totalEarnings)
+        elseif Config.Framework == "QBCore" then
+            xPlayer.Functions.AddMoney('cash', totalEarnings)
         end
         
+        -- Remove sold items from the player's inventory
+        for _, sale in ipairs(soldItems) do
+            if Config.Framework == "ESX" then
+                xPlayer.removeInventoryItem(sale.item, sale.count)
+            elseif Config.Framework == "QBCore" then
+                xPlayer.Functions.RemoveItem(sale.item, sale.count)
+            end
+        end
+        
+        -- Notify the player of the completed sale
         TriggerClientEvent('fourtwenty_dynmarket:sellComplete', source, {
             total = totalEarnings,
             items = soldItems
@@ -461,9 +536,11 @@ AddEventHandler('fourtwenty_dynmarket:sellItems', function(marketId, itemList)
             print(string.format("[DynMarket] Sale completed for %s: $%d", xPlayer.identifier, totalEarnings))
         end
     else
+        -- Notify the player if no items were sold
         TriggerClientEvent('fourtwenty_dynmarket:notification', source, 'no_items')
     end
 end)
+
 
 -- Counter item sale event
 RegisterServerEvent('fourtwenty_dynmarket:counterItemSold')
@@ -498,31 +575,59 @@ AddEventHandler('fourtwenty_dynmarket:counterItemSold', function(marketId, itemN
     })
 end)
 
--- ESX Callbacks
-ESX.RegisterServerCallback('fourtwenty_dynmarket:getMarketInfo', function(source, cb, marketId)
-    -- Validate market exists and is enabled
-    if not Config.Markets[marketId] or not Config.Markets[marketId].enabled then
-        cb(false)
-        return
-    end
-    
-    -- Validate market has been initialized
-    if not nextUpdates[marketId] then
-        cb(false)
-        return
-    end
-    
-    -- Calculate time until next price update
-    local timeUntilUpdate = math.max(0, (nextUpdates[marketId] - os.time()) * 1000)
-    
-    -- Return market data
-    cb({
-        config = Config.Markets[marketId],
-        prices = marketPrices[marketId] or {},
-        trends = marketTrends[marketId] or {},
-        nextUpdate = timeUntilUpdate
-    })
-end)
+if Config.Framework == "ESX" then
+    ESX.RegisterServerCallback('fourtwenty_dynmarket:getMarketInfo', function(source, cb, marketId)
+        -- Validate market exists and is enabled
+        if not Config.Markets[marketId] or not Config.Markets[marketId].enabled then
+            cb(false)
+            return
+        end
+        
+        -- Validate market has been initialized
+        if not nextUpdates[marketId] then
+            cb(false)
+            return
+        end
+        
+        -- Calculate time until next price update
+        local timeUntilUpdate = math.max(0, (nextUpdates[marketId] - os.time()) * 1000)
+        
+        -- Return market data
+        cb({
+            config = Config.Markets[marketId],
+            prices = marketPrices[marketId] or {},
+            trends = marketTrends[marketId] or {},
+            nextUpdate = timeUntilUpdate
+        })
+    end)
+elseif Config.Framework == "QBCore" then
+    QBCore.Functions.CreateCallback('fourtwenty_dynmarket:getMarketInfo', function(source, cb, marketId)
+        -- Validate market exists and is enabled
+        if not Config.Markets[marketId] or not Config.Markets[marketId].enabled then
+            cb(false)
+            return
+        end
+        
+        -- Validate market has been initialized
+        if not nextUpdates[marketId] then
+            cb(false)
+            return
+        end
+        
+        -- Calculate time until next price update
+        local timeUntilUpdate = math.max(0, (nextUpdates[marketId] - os.time()) * 1000)
+        
+        -- Return market data
+        cb({
+            config = Config.Markets[marketId],
+            prices = marketPrices[marketId] or {},
+            trends = marketTrends[marketId] or {},
+            nextUpdate = timeUntilUpdate
+        })
+    end)
+else
+    print("^1ERROR: Unsupported framework: " .. Config.Framework .. "^7")
+end
 
 -- Additional helper functions
 local function ResetSupplyDemand(marketId)

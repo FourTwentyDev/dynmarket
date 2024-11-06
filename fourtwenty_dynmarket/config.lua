@@ -1,15 +1,15 @@
 Config = {}
-
+-- frameworks
+Config.Framework = "ESX" -- Set to "ESX" or "QBCore" to select the framework
 -- General settings
-Config.Debug = false
+Config.Debug = true
 Config.Locale = 'en'
-
 -- Using OX Inventory?
 Config.ox_inventory = false -- Set true if you use ox_inventory
 
 -- Market update intervals (in milliseconds)
 Config.Intervals = {
-    randomUpdate = 1800000,    -- 30 minutes - Base interval for random price changes
+    randomUpdate = 30000,    -- 30 minutes - Base interval for random price changes
     minSaleDelay = 300000      -- 5 minutes - Minimum time between supply/demand updates
 }
 
@@ -19,6 +19,14 @@ Config.UI = {
     closeKey = 177,       -- Backspace to close
     inventoryLink = "nui://inventory/web/dist/assets/items/%s.png"
 }
+
+Config.PriceCalculation = {
+    randomWeight = 0.3, -- Weight for random price changes (e.g., 40%)
+    supplyWeight = 0.7, -- Weight for supply/demand (e.g., 60%)
+    minChangeThreshold = 1 -- Minimum price difference to register changes 
+    -- only change this to a higher value if you want to only reflect bigger price changes like $5, lower values and .x values are not allowed
+}
+
 
 Config.Markets = {
     ["food_market"] = {
@@ -54,38 +62,12 @@ Config.Markets = {
         },
         items = {
             {
-                name = "Burgerbrötchen",
-                item = "ing_bread",
+                name = "water",
+                item = "water",
                 basePrice = 100,
-                category = "Backwaren",
-                counterItem = "burger",  -- Optional: Counter-Item
+                category = "water",
+                counterItem = "water",  -- Optional: Counter-Item
                 counterEffect = 0.05     -- Optional: Counter-Item effect
-            },
-            {
-                name = "Fleisch",
-                item = "ing_meat",
-                basePrice = 100,
-                category = "Fleisch"     -- No counter item defined
-            },
-            {
-                name = "Salat",
-                item = "ing_salad",
-                basePrice = 100,
-                category = "Gemüse",
-                counterItem = "burger",
-                counterEffect = 0.03
-            },
-            {
-                name = "Tomaten",
-                item = "ing_tomato",
-                basePrice = 100,
-                category = "Gemüse"
-            },
-            {
-                name = "Gewürzgurken",
-                item = "ing_pickle",
-                basePrice = 100,
-                category = "Gemüse"
             }
         }
     },

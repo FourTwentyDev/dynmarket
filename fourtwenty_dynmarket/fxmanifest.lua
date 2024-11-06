@@ -29,9 +29,9 @@ files {
     'html/script.js'
 }
 
-dependencies {
-    'es_extended',
-    'oxmysql'
-}
+-- dependencies {
+--     'es_extended',
+--     'oxmysql'
+-- }
 
 lua54 'yes'

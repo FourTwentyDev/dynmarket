@@ -1,5 +1,18 @@
--- Initialize ESX framework
-ESX = exports["es_extended"]:getSharedObject()
+local QBCore, ESX = nil, nil
+
+if Config.Framework == "QBCore" then
+    QBCore = exports['qb-core']:GetCoreObject()
+    if not QBCore then
+        print("^1ERROR: Failed to get QBCore object.^7")
+    end
+elseif Config.Framework == "ESX" then
+    ESX = exports['es_extended']:getSharedObject()
+    if not ESX then
+        print("^1ERROR: Failed to get ESX shared object.^7")
+    end
+else
+    print("^1ERROR: Unsupported framework: " .. Config.Framework .. "^7")
+end
 
 -- State management
 local currentMarket = nil
@@ -138,7 +151,11 @@ CreateThread(function()
                     
                     -- Show interaction prompt
                     if not showingUI then
-                        ESX.ShowHelpNotification(Translate('press_interact'))
+                        if Config.Framework == "ESX" and ESX then
+                            ESX.ShowHelpNotification(Translate('press_interact'))
+                        elseif Config.Framework == "QBCore" and QBCore then
+                            QBCore.Functions.Notify(Translate('press_interact'), "primary")
+                        end
                         
                         -- Handle interaction key press
                         if IsControlJustPressed(0, Config.UI.key) then
@@ -150,36 +167,46 @@ CreateThread(function()
             end
         end
         
-        -- Auto-close UI when player walks away
         if not isNearMarket and showingUI then
             CloseMarketUI()
-        end
+        end        
         
         Wait(sleep)
     end
 end)
 
+
 -- UI Management Functions
 function OpenMarketUI(marketId)
     if showingUI then return end
     
-    ESX.TriggerServerCallback('fourtwenty_dynmarket:getMarketInfo', function(marketData)
-        if not marketData then return end
-        
-        showingUI = true
-        SetNuiFocus(true, true)
-        
-        -- Prepare and send UI data
-        local uiData = {
-            type = 'showUI',
-            marketData = marketData,
-            translations = GetTranslations(),
-            inventoryLink = Config.UI.inventoryLink,
-            supplyDemandEnabled = Config.IsSupplyDemandEnabled(marketId)
-        }
-        
-        SendNUIMessage(uiData)
-    end, marketId)
+    if Config.Framework == "ESX" then
+        ESX.TriggerServerCallback('fourtwenty_dynmarket:getMarketInfo', function(marketData)
+            if not marketData then return end
+            DisplayMarketUI(marketData, marketId)
+        end, marketId)
+    elseif Config.Framework == "QBCore" then
+        QBCore.Functions.TriggerCallback('fourtwenty_dynmarket:getMarketInfo', function(marketData)
+            if not marketData then return end
+            DisplayMarketUI(marketData, marketId)
+        end, marketId)
+    end
+end
+
+function DisplayMarketUI(marketData, marketId)
+    showingUI = true
+    SetNuiFocus(true, true)
+
+    -- Prepare and send UI data
+    local uiData = {
+        type = 'showUI',
+        marketData = marketData,
+        translations = GetTranslations(),
+        inventoryLink = Config.UI.inventoryLink,
+        supplyDemandEnabled = Config.IsSupplyDemandEnabled(marketId)
+    }
+
+    SendNUIMessage(uiData)
 end
 
 function CloseMarketUI()
@@ -221,39 +248,47 @@ function GetTranslations()
     return translations
 end
 
--- Event Handlers
-RegisterNetEvent('fourtwenty_dynmarket:updatePrices')
-AddEventHandler('fourtwenty_dynmarket:updatePrices', function(marketId, prices, trends, nextUpdate)
-    if showingUI and currentMarket == marketId then
-        SendNUIMessage({
-            type = 'updatePrices',
-            prices = prices,
-            trends = trends,
-            nextUpdate = nextUpdate,
-            supplyDemandEnabled = Config.IsSupplyDemandEnabled(marketId)
-        })
+    local function ShowNotification(message)
+        if Config.Framework == "ESX" then
+            ESX.ShowNotification(message)
+        elseif Config.Framework == "QBCore" then
+            QBCore.Functions.Notify(message)
+        end
     end
-end)
-
-RegisterNetEvent('fourtwenty_dynmarket:sellComplete')
-AddEventHandler('fourtwenty_dynmarket:sellComplete', function(data)
-    ESX.ShowNotification(Translate('sold_items', data.total))
     
-    if showingUI then
-        SendNUIMessage({
-            type = 'sellComplete',
-            data = data
-        })
+    -- Event Handlers
+    RegisterNetEvent('fourtwenty_dynmarket:updatePrices')
+    AddEventHandler('fourtwenty_dynmarket:updatePrices', function(marketId, prices, trends, nextUpdate)
+        if showingUI and currentMarket == marketId then
+            SendNUIMessage({
+                type = 'updatePrices',
+                prices = prices,
+                trends = trends,
+                nextUpdate = nextUpdate,
+                supplyDemandEnabled = Config.IsSupplyDemandEnabled(marketId)
+            })
+        end
+    end)
+    
+    
+    RegisterNetEvent('fourtwenty_dynmarket:sellComplete')
+    AddEventHandler('fourtwenty_dynmarket:sellComplete', function(data)
+        ShowNotification(Translate('sold_items', data.total))
         
-        -- Request inventory refresh after sale
-        TriggerEvent('fourtwenty_dynmarket:refreshInventory')
-    end
-end)
-
-RegisterNetEvent('fourtwenty_dynmarket:notification')
-AddEventHandler('fourtwenty_dynmarket:notification', function(message)
-    ESX.ShowNotification(Translate(message))
-end)
+        if showingUI then
+            SendNUIMessage({
+                type = 'sellComplete',
+                data = data
+            })
+            TriggerEvent('fourtwenty_dynmarket:refreshInventory')
+        end
+    end)
+    
+    RegisterNetEvent('fourtwenty_dynmarket:notification')
+    AddEventHandler('fourtwenty_dynmarket:notification', function(message)
+        ShowNotification(Translate(message))
+    end)
+    
 
 -- Resource cleanup
 AddEventHandler('onResourceStop', function(resourceName)
@@ -272,12 +307,14 @@ AddEventHandler('onResourceStop', function(resourceName)
         showingUI = false
     end
 end)
-
 -- NUI Callbacks
 RegisterNUICallback('closeUI', function(data, cb)
-    CloseMarketUI()
+    if showingUI then
+        CloseMarketUI()
+    end
     cb('ok')
 end)
+
 
 RegisterNUICallback('sellItems', function(data, cb)
     if not currentMarket then 
@@ -297,8 +334,7 @@ RegisterNUICallback('getPlayerInventory', function(data, cb)
 
     if Config.ox_inventory then
         local inventory = {}
-        local items = exports.ox_inventory:Items()
-    
+        local items = exports.ox_inventory:Items() or {}
         for _, item in pairs(items) do
             if item.count and item.count > 0 then
                 inventory[item.name] = {
@@ -309,23 +345,47 @@ RegisterNUICallback('getPlayerInventory', function(data, cb)
         end
         cb(inventory)
     else
-        local playerData = ESX.GetPlayerData()
         local inventory = {}
-        
-        -- Format inventory data for UI
-        if playerData and playerData.inventory then
-            for _, item in ipairs(playerData.inventory) do
-                if item.count and item.count > 0 then
-                    inventory[item.name] = {
-                        count = item.count,
-                        label = item.label
-                    }
+
+        if Config.Framework == "ESX" then
+            local playerData = ESX.GetPlayerData()
+            
+            if playerData and playerData.inventory then
+                for _, item in ipairs(playerData.inventory) do
+                    if item.count and item.count > 0 then
+                        inventory[item.name] = {
+                            count = item.count,
+                            label = item.label
+                        }
+                    end
+                end
+            end
+        elseif Config.Framework == "QBCore" then
+            local playerData = QBCore.Functions.GetPlayerData()
+
+            if playerData and playerData.items then
+                for _, item in ipairs(playerData.items) do
+                    if item.amount and item.amount > 0 then
+                        inventory[item.name] = {
+                            count = item.amount,
+                            label = item.label
+                        }
+                    end
                 end
             end
         end
-        cb(inventory)
+
+        cb(inventory or {})
     end
 end)
+
+local function ShowNotification(message)
+    if Config.Framework == "ESX" then
+        ESX.ShowNotification(message)
+    elseif Config.Framework == "QBCore" then
+        QBCore.Functions.Notify(message)
+    end
+end
 
 -- Additional utility functions
 function IsPlayerNearMarket(marketId)
@@ -347,7 +407,7 @@ if Config.UI.command then
         if Config.Markets[marketId] and IsPlayerNearMarket(marketId) then
             OpenMarketUI(marketId)
         else
-            ESX.ShowNotification(Translate('not_near_market'))
+            ShowNotification(Translate('not_near_market'))
         end
     end)
 end
