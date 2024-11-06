@@ -2,14 +2,14 @@ Config = {}
 -- frameworks
 Config.Framework = "ESX" -- Set to "ESX" or "QBCore" to select the framework
 -- General settings
-Config.Debug = true
+Config.Debug = false
 Config.Locale = 'en'
 -- Using OX Inventory?
 Config.ox_inventory = false -- Set true if you use ox_inventory
 
 -- Market update intervals (in milliseconds)
 Config.Intervals = {
-    randomUpdate = 30000,    -- 30 minutes - Base interval for random price changes
+    randomUpdate = 1800000,    -- 30 minutes - Base interval for random price changes
     minSaleDelay = 300000      -- 5 minutes - Minimum time between supply/demand updates
 }
 
