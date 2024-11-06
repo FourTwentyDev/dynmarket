@@ -2,7 +2,7 @@
 A sophisticated and highly customizable dynamic market system with real-time price fluctuations, supply & demand mechanics, and an intuitive NUI interface. Create unlimited custom markets with advanced economic features for your FiveM server.
 
 ## Configuration Tutorial
-[Click Me](README.md)  
+[Click Me](configuration.md)  
 
 ## Unique Features 🚀
 
