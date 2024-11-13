@@ -49,33 +49,40 @@ CreateThread(function()
             
             -- Ensure coordinates are valid
             if market.location and market.location.coords then
-                -- Create map blip with error handling
-                local blip = AddBlipForCoord(
-                    market.location.coords.x,
-                    market.location.coords.y,
-                    market.location.coords.z
-                )
-                
-                if blip and blip ~= 0 then -- Validate blip creation
-                    SetBlipSprite(blip, market.blip.sprite or 1)
-                    SetBlipDisplay(blip, market.blip.display or 4)
-                    SetBlipScale(blip, market.blip.scale or 1.0)
-                    SetBlipColour(blip, market.blip.color or 1)
-                    SetBlipAsShortRange(blip, true)
+                -- Prüfe, ob der Blip aktiviert ist
+                if market.blip and market.blip.state ~= false then
+                    -- Create map blip with error handling
+                    local blip = AddBlipForCoord(
+                        market.location.coords.x,
+                        market.location.coords.y,
+                        market.location.coords.z
+                    )
                     
-                    -- Set blip name with error handling
-                    BeginTextCommandSetBlipName("STRING")
-                    AddTextComponentString(market.name or "Market")
-                    EndTextCommandSetBlipName(blip)
-                    
-                    -- Store blip reference
-                    marketBlips[marketId] = blip
-                    
-                    if Config.Debug then
-                        print("Successfully created blip for " .. marketId)
+                    if blip and blip ~= 0 then -- Validate blip creation
+                        SetBlipSprite(blip, market.blip.sprite or 1)
+                        SetBlipDisplay(blip, market.blip.display or 4)
+                        SetBlipScale(blip, market.blip.scale or 1.0)
+                        SetBlipColour(blip, market.blip.color or 1)
+                        SetBlipAsShortRange(blip, true)
+                        
+                        -- Set blip name with error handling
+                        BeginTextCommandSetBlipName("STRING")
+                        AddTextComponentString(market.name or "Market")
+                        EndTextCommandSetBlipName(blip)
+                        
+                        -- Store blip reference
+                        marketBlips[marketId] = blip
+                        
+                        if Config.Debug then
+                            print("Successfully created blip for " .. marketId)
+                        end
+                    else
+                        print("^1ERROR: Failed to create blip for " .. marketId .. "^7")
                     end
                 else
-                    print("^1ERROR: Failed to create blip for " .. marketId .. "^7")
+                    if Config.Debug then
+                        print("Blip for " .. marketId .. " is disabled (state = false)")
+                    end
                 end
             else
                 print("^1ERROR: Invalid coordinates for market " .. marketId .. "^7")
@@ -130,6 +137,7 @@ CreateThread(function()
         end
     end
 end)
+
 
 -- Market interaction loop
 CreateThread(function()
