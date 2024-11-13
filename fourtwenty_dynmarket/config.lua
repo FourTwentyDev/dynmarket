@@ -33,6 +33,7 @@ Config.Markets = {
         enabled = true,
         name = "Lebensmittelmarkt",
         blip = {
+            state = false, -- Set a state as "false" if u want to disable the Blip
             sprite = 52,
             color = 2,
             scale = 0.8,
