@@ -13,6 +13,7 @@ elseif Config.Framework == "ESX" then
 else
     print("^1ERROR: Unsupported framework: " .. Config.Framework .. "^7")
 end
+
 -- State management
 local marketPrices = {}
 local nextUpdates = {}
@@ -163,6 +164,10 @@ local function GetBaseSupplyImpact(marketId, itemName)
 end
 
 local function GetCounterItemEffect(marketId, itemName)
+    if not Config.PriceCalculation.influences.counterItems.enabled then
+        return 0.0
+    end
+
     local market = Config.Markets[marketId]
     if not market then return 0.0 end
     
@@ -261,53 +266,50 @@ local function CalculateNewPrice(marketId, itemName)
         print("Current price: " .. currentPrice)
     end
 
-    -- Calculate random fluctuation
-    local maxChange = math.floor(basePrice * (market.priceSettings.maxChangePercent / 100))
-    local randomChange = math.random(-maxChange, maxChange)
+    local totalChange = 0
+    local totalWeight = 0
 
-    if Config.Debug then
-        print("Random price change: " .. randomChange)
-    end
+    -- Calculate random fluctuation if enabled
+    if Config.PriceCalculation.influences.randomFluctuation.enabled then
+        local maxChange = math.floor(basePrice * (market.priceSettings.maxChangePercent / 100))
+        local randomChange = math.random(-maxChange, maxChange)
+        local randomWeight = Config.PriceCalculation.influences.randomFluctuation.weight
 
-    -- Apply supply & demand impact
-    local supplyImpact = 0.0
-    if Config.IsSupplyDemandEnabled(marketId) then
-        supplyImpact = GetSupplyImpact(marketId, itemName)
-        supplyImpact = math.floor(basePrice * supplyImpact) -- Convert to price delta
+        totalChange = totalChange + (randomChange * randomWeight)
+        totalWeight = totalWeight + randomWeight
 
         if Config.Debug then
-            print("Supply impact (price delta): " .. supplyImpact)
+            print("Random price change: " .. randomChange)
+            print("Random weight: " .. randomWeight)
         end
     end
 
-    -- Dynamic weight adjustment
-    local totalSales = MySQL.Sync.fetchScalar([[ 
-        SELECT SUM(quantity) 
-        FROM fourtwenty_market_sales 
-        WHERE market_id = @marketId 
-        AND item_name = @itemName 
-        AND sale_time > DATE_SUB(NOW(), INTERVAL 1 HOUR)
-    ]], {
-        ['@marketId'] = marketId,
-        ['@itemName'] = itemName
-    }) or 0
+    -- Apply supply & demand impact if enabled
+    if Config.PriceCalculation.influences.supplyDemand.enabled then
+        local supplyImpact = GetSupplyImpact(marketId, itemName)
+        local supplyChange = math.floor(basePrice * supplyImpact)
+        local supplyWeight = Config.PriceCalculation.influences.supplyDemand.weight
 
-    local dynamicWeight = math.min(totalSales / 50, 1.0) -- Max weight at 50+ sales
-    local randomWeight = 1.0 - dynamicWeight
-    local supplyWeight = dynamicWeight
+        totalChange = totalChange + (supplyChange * supplyWeight)
+        totalWeight = totalWeight + supplyWeight
 
-    if Config.Debug then
-        print(string.format("Weights - Random: %.2f, Supply: %.2f", randomWeight, supplyWeight))
+        if Config.Debug then
+            print("Supply impact (price delta): " .. supplyChange)
+            print("Supply weight: " .. supplyWeight)
+        end
     end
 
-    local combinedChange = (randomChange * randomWeight) + (supplyImpact * supplyWeight)
+    -- Normalize the total change if we have any weights
+    if totalWeight > 0 then
+        totalChange = totalChange / totalWeight
+    end
 
     if Config.Debug then
-        print("Combined price change (weighted): " .. combinedChange)
+        print("Total weighted change: " .. totalChange)
     end
 
     -- Final price calculation
-    local newPrice = currentPrice + combinedChange
+    local newPrice = currentPrice + totalChange
     local minPrice = math.floor(basePrice * market.priceSettings.minMultiplier)
     local maxPrice = math.floor(basePrice * market.priceSettings.maxMultiplier)
     local finalPrice = math.max(minPrice, math.min(maxPrice, math.floor(newPrice + 0.5))) -- Ensure whole numbers
@@ -346,9 +348,6 @@ local function CalculateNewPrice(marketId, itemName)
 
     return finalPrice
 end
-
-
-
 
 local function UpdateMarketPrices(marketId)
     if not Config.Markets[marketId] or not Config.Markets[marketId].enabled then 
@@ -407,12 +406,14 @@ CreateThread(function()
     while true do
         Wait(3600000) -- Check every hour
         
-        -- Reduce counter item quantities by 50% if they haven't been updated in 24 hours
-        MySQL.Async.execute([[
-            UPDATE fourtwenty_counter_items 
-            SET counter_quantity = FLOOR(counter_quantity * 0.5)
-            WHERE last_update < DATE_SUB(NOW(), INTERVAL 24 HOUR)
-        ]])
+        if Config.PriceCalculation.influences.counterItems.enabled then
+            -- Reduce counter item quantities by 50% if they haven't been updated in 24 hours
+            MySQL.Async.execute([[
+                UPDATE fourtwenty_counter_items 
+                SET counter_quantity = FLOOR(counter_quantity * 0.5)
+                WHERE last_update < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            ]])
+        end
     end
 end)
 
@@ -508,7 +509,6 @@ AddEventHandler('fourtwenty_dynmarket:sellItems', function(marketId, itemList)
         end
     end
 
-
     if totalEarnings > 0 then
         -- Add the money to the player's account
         if Config.Framework == "ESX" then
@@ -541,10 +541,11 @@ AddEventHandler('fourtwenty_dynmarket:sellItems', function(marketId, itemList)
     end
 end)
 
-
 -- Counter item sale event
 RegisterServerEvent('fourtwenty_dynmarket:counterItemSold')
 AddEventHandler('fourtwenty_dynmarket:counterItemSold', function(marketId, itemName, counterItem, quantity)
+    if not Config.PriceCalculation.influences.counterItems.enabled then return end
+    
     if not Config.Markets[marketId] then return end
     
     -- Validate that this counter item exists in configuration
